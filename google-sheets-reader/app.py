@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -6,8 +8,12 @@ from shiny import reactive, render
 from shiny.express import session, ui
 
 
-SHEET_ID = "1Yr7iGqaFFtKfcg5gJR1fwjMcmoCW-CK6NW_91u1sAsk"
-SHEET_GID = 780868077
+SHEET_ID = os.environ.get("SHEET_ID", "")
+SHEET_GID_RAW = os.environ.get("SHEET_GID", "")
+try:
+    SHEET_GID: int | None = int(SHEET_GID_RAW) if SHEET_GID_RAW else None
+except ValueError:
+    SHEET_GID = None
 
 
 ui.page_opts(title="Google Sheets Reader", fillable=True)
@@ -27,6 +33,12 @@ def connect_client():
 def sheet_data():
     """Returns (DataFrame, info_dict). info_dict has 'tab_title' and optional 'error'."""
     info: dict[str, str | None] = {"tab_title": None, "error": None}
+    if not SHEET_ID:
+        info["error"] = "SHEET_ID environment variable is not set."
+        return pd.DataFrame(), info
+    if SHEET_GID is None:
+        info["error"] = "SHEET_GID environment variable is not set or not an integer."
+        return pd.DataFrame(), info
     token = session_token()
     if not token:
         info["error"] = (
@@ -86,8 +98,8 @@ with ui.card():
     def status_display():
         df, info = sheet_data()
         items = [
-            ui.tags.li(f"Spreadsheet ID: {SHEET_ID}"),
-            ui.tags.li(f"Target gid: {SHEET_GID}"),
+            ui.tags.li(f"Spreadsheet ID (env SHEET_ID): {SHEET_ID or '<unset>'}"),
+            ui.tags.li(f"Target gid (env SHEET_GID): {SHEET_GID if SHEET_GID is not None else '<unset>'}"),
             ui.tags.li(f"Session token present: {bool(session_token())}"),
         ]
         if info.get("tab_title"):
