@@ -19,9 +19,14 @@ def session_token():
 
 
 @reactive.calc
+def connect_client():
+    return connect.Client()
+
+
+@reactive.calc
 def sheet_data():
     """Returns (DataFrame, info_dict). info_dict has 'tab_title' and optional 'error'."""
-    info = {"tab_title": None, "error": None}
+    info: dict[str, str | None] = {"tab_title": None, "error": None}
     token = session_token()
     if not token:
         info["error"] = (
@@ -30,7 +35,8 @@ def sheet_data():
         )
         return pd.DataFrame(), info
     try:
-        creds_response = connect.Client().oauth.get_credentials(token)
+        client = connect_client()
+        creds_response = client.oauth.get_credentials(token)
         access_token = creds_response.get("access_token")
         if not access_token:
             info["error"] = (
