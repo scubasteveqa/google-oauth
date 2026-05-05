@@ -29,13 +29,12 @@ def connect_client():
     return connect.Client()
 
 
-with ui.card():
-    ui.card_header("Query")
+with ui.sidebar(width=400):
     ui.input_text_area(
         "query",
-        None,
+        "SQL query",
         placeholder="SELECT * FROM `bigquery-public-data.usa_names.usa_1910_2013` LIMIT 10",
-        rows=6,
+        rows=14,
         width="100%",
     )
     ui.input_action_button("run", "Run query", class_="btn-primary")
@@ -48,7 +47,7 @@ def query_results():
     info: dict[str, str | int | None] = {"rows_returned": None, "error": None}
     sql = (input.query() or "").strip()
     if not sql:
-        info["error"] = "Enter a SQL query above and click Run query."
+        info["error"] = "Enter a SQL query in the sidebar and click Run query."
         return pd.DataFrame(), info
     if not BIGQUERY_PROJECT:
         info["error"] = "BIGQUERY_PROJECT environment variable is not set."
@@ -86,32 +85,19 @@ def query_results():
         return pd.DataFrame(), info
 
 
-with ui.card():
-    ui.card_header("Status")
-
-    @render.ui
-    def status_display():
-        df, info = query_results()
-        items = [
-            ui.tags.li(f"Billing project (env BIGQUERY_PROJECT): {BIGQUERY_PROJECT or '<unset>'}"),
-            ui.tags.li(f"Row limit (env ROW_LIMIT): {ROW_LIMIT}"),
-            ui.tags.li(f"Session token present: {bool(session_token())}"),
-        ]
-        if info.get("error"):
-            return ui.div(
-                ui.tags.ul(*items),
-                ui.div(
-                    ui.tags.strong("Error: "),
-                    ui.tags.pre(info["error"]),
-                    class_="alert alert-danger",
-                ),
-            )
-        items.append(ui.tags.li(f"Loaded {len(df)} rows × {len(df.columns)} columns"))
-        return ui.tags.ul(*items)
-
-
 with ui.card(full_screen=True):
     ui.card_header("Query results")
+
+    @render.ui
+    def message():
+        df, info = query_results()
+        if info.get("error"):
+            return ui.div(
+                ui.tags.strong("Error: "),
+                ui.tags.pre(info["error"]),
+                class_="alert alert-danger",
+            )
+        return ui.tags.p(f"{len(df)} rows × {len(df.columns)} columns")
 
     @render.data_frame
     def grid():
