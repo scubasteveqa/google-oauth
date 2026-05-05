@@ -9,8 +9,6 @@ The app exchanges the inbound `Posit-Connect-User-Session-Token` for a Google ac
 | Variable           | Type    | Description                                                                                                                       |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `BIGQUERY_PROJECT` | string  | The GCP project ID used to bill the query. Must be a project the viewer has BigQuery permissions on.                              |
-| `BIGQUERY_QUERY`   | string  | The SQL to execute. Reference tables with the fully-qualified form `\`project.dataset.table\`` so they don't depend on the billing project. |
-| `ROW_LIMIT`        | integer | Optional. Max rows pulled into the DataFrame (1–100000). Defaults to 1000. Use this to cap large result sets.                     |
 
 ### Example query
 
