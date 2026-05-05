@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+import requests
 from google.cloud import bigquery
 from google.oauth2.credentials import Credentials
 from posit import connect
@@ -71,6 +72,60 @@ def query_results():
     except Exception as e:
         info["error"] = f"BigQuery API error ({type(e).__name__}): {e}"
         return pd.DataFrame(), info
+
+
+@reactive.calc
+def token_scopes_info():
+    """Debug: call Google's tokeninfo endpoint and return scope info or an error."""
+    token = session_token()
+    if not token:
+        return {"error": "No session token."}
+    try:
+        client = connect_client()
+        creds_response = client.oauth.get_credentials(token)
+        access_token = creds_response.get("access_token")
+        if not access_token:
+            return {"error": f"No access_token in credentials response. keys={list(creds_response.keys())}"}
+    except Exception as e:
+        return {"error": f"OAuth credential exchange failed ({type(e).__name__}): {e}"}
+    try:
+        resp = requests.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"access_token": access_token},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return {"error": f"tokeninfo {resp.status_code}: {resp.text}"}
+        return resp.json()
+    except Exception as e:
+        return {"error": f"tokeninfo call failed ({type(e).__name__}): {e}"}
+
+
+with ui.card():
+    ui.card_header("Debug — token scopes (remove before production use)")
+
+    @render.ui
+    def token_scopes_display():
+        info = token_scopes_info()
+        if "error" in info:
+            return ui.div(
+                ui.tags.strong("Error: "),
+                ui.tags.pre(info["error"]),
+                class_="alert alert-danger",
+            )
+        scope = info.get("scope", "")
+        scopes_list = scope.split() if scope else []
+        other = {k: v for k, v in info.items() if k != "scope"}
+        return ui.div(
+            ui.tags.p(ui.tags.strong("Scopes granted:")),
+            (
+                ui.tags.ul(*[ui.tags.li(ui.tags.code(s)) for s in scopes_list])
+                if scopes_list
+                else ui.tags.em("(none)")
+            ),
+            ui.tags.p(ui.tags.strong("Other tokeninfo fields:")),
+            ui.tags.pre(str(other)),
+        )
 
 
 with ui.card():
