@@ -29,11 +29,19 @@ def connect_client():
     return connect.Client()
 
 
+DEFAULT_QUERY = """SELECT name, gender, SUM(number) AS total
+FROM `bigquery-public-data.usa_names.usa_1910_2013`
+WHERE state = 'TX'
+GROUP BY name, gender
+ORDER BY total DESC
+LIMIT 50"""
+
+
 with ui.sidebar(width=400):
     ui.input_text_area(
         "query",
         "SQL query",
-        placeholder="SELECT * FROM `bigquery-public-data.usa_names.usa_1910_2013` LIMIT 10",
+        value=DEFAULT_QUERY,
         rows=14,
         width="100%",
     )
