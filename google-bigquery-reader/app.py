@@ -1,16 +1,14 @@
 import os
 
 import pandas as pd
-import requests
 from google.cloud import bigquery
 from google.oauth2.credentials import Credentials
 from posit import connect
 from shiny import reactive, render
-from shiny.express import session, ui
+from shiny.express import input, session, ui
 
 
 BIGQUERY_PROJECT = os.environ.get("BIGQUERY_PROJECT", "")
-BIGQUERY_QUERY = os.environ.get("BIGQUERY_QUERY", "")
 ROW_LIMIT_RAW = os.environ.get("ROW_LIMIT", "1000")
 try:
     ROW_LIMIT = max(1, min(int(ROW_LIMIT_RAW), 100000))
@@ -31,15 +29,29 @@ def connect_client():
     return connect.Client()
 
 
+with ui.card():
+    ui.card_header("Query")
+    ui.input_text_area(
+        "query",
+        None,
+        placeholder="SELECT * FROM `bigquery-public-data.usa_names.usa_1910_2013` LIMIT 10",
+        rows=6,
+        width="100%",
+    )
+    ui.input_action_button("run", "Run query", class_="btn-primary")
+
+
 @reactive.calc
+@reactive.event(input.run)
 def query_results():
-    """Returns (DataFrame, info_dict). info_dict has 'rows_returned' and optional 'error'."""
+    """Returns (DataFrame, info_dict). Re-runs only when the Run button is clicked."""
     info: dict[str, str | int | None] = {"rows_returned": None, "error": None}
+    sql = (input.query() or "").strip()
+    if not sql:
+        info["error"] = "Enter a SQL query above and click Run query."
+        return pd.DataFrame(), info
     if not BIGQUERY_PROJECT:
         info["error"] = "BIGQUERY_PROJECT environment variable is not set."
-        return pd.DataFrame(), info
-    if not BIGQUERY_QUERY:
-        info["error"] = "BIGQUERY_QUERY environment variable is not set."
         return pd.DataFrame(), info
     token = session_token()
     if not token:
@@ -63,7 +75,7 @@ def query_results():
     try:
         google_creds = Credentials(token=access_token)
         bq_client = bigquery.Client(project=BIGQUERY_PROJECT, credentials=google_creds)
-        job = bq_client.query(BIGQUERY_QUERY)
+        job = bq_client.query(sql)
         df = job.result(max_results=ROW_LIMIT).to_dataframe()
         info["rows_returned"] = len(df)
         if df.empty:
@@ -72,60 +84,6 @@ def query_results():
     except Exception as e:
         info["error"] = f"BigQuery API error ({type(e).__name__}): {e}"
         return pd.DataFrame(), info
-
-
-@reactive.calc
-def token_scopes_info():
-    """Debug: call Google's tokeninfo endpoint and return scope info or an error."""
-    token = session_token()
-    if not token:
-        return {"error": "No session token."}
-    try:
-        client = connect_client()
-        creds_response = client.oauth.get_credentials(token)
-        access_token = creds_response.get("access_token")
-        if not access_token:
-            return {"error": f"No access_token in credentials response. keys={list(creds_response.keys())}"}
-    except Exception as e:
-        return {"error": f"OAuth credential exchange failed ({type(e).__name__}): {e}"}
-    try:
-        resp = requests.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"access_token": access_token},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            return {"error": f"tokeninfo {resp.status_code}: {resp.text}"}
-        return resp.json()
-    except Exception as e:
-        return {"error": f"tokeninfo call failed ({type(e).__name__}): {e}"}
-
-
-with ui.card():
-    ui.card_header("Debug — token scopes (remove before production use)")
-
-    @render.ui
-    def token_scopes_display():
-        info = token_scopes_info()
-        if "error" in info:
-            return ui.div(
-                ui.tags.strong("Error: "),
-                ui.tags.pre(info["error"]),
-                class_="alert alert-danger",
-            )
-        scope = info.get("scope", "")
-        scopes_list = scope.split() if scope else []
-        other = {k: v for k, v in info.items() if k != "scope"}
-        return ui.div(
-            ui.tags.p(ui.tags.strong("Scopes granted:")),
-            (
-                ui.tags.ul(*[ui.tags.li(ui.tags.code(s)) for s in scopes_list])
-                if scopes_list
-                else ui.tags.em("(none)")
-            ),
-            ui.tags.p(ui.tags.strong("Other tokeninfo fields:")),
-            ui.tags.pre(str(other)),
-        )
 
 
 with ui.card():
@@ -139,19 +97,6 @@ with ui.card():
             ui.tags.li(f"Row limit (env ROW_LIMIT): {ROW_LIMIT}"),
             ui.tags.li(f"Session token present: {bool(session_token())}"),
         ]
-        if BIGQUERY_QUERY:
-            items.append(
-                ui.tags.li(
-                    "Query: ",
-                    ui.tags.code(
-                        BIGQUERY_QUERY
-                        if len(BIGQUERY_QUERY) <= 200
-                        else BIGQUERY_QUERY[:200] + "…"
-                    ),
-                )
-            )
-        else:
-            items.append(ui.tags.li("Query (env BIGQUERY_QUERY): <unset>"))
         if info.get("error"):
             return ui.div(
                 ui.tags.ul(*items),
