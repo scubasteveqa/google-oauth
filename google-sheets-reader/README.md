@@ -9,6 +9,10 @@ The app exchanges the inbound `Posit-Connect-User-Session-Token` for a Google ac
 | Variable    | Type    | Description                                                                                                                                       |
 | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SHEET_ID`  | string  | The spreadsheet ID — the long token between `/d/` and `/edit` in the sheet URL.                                                                   |
+
+## Required environment variables
+| Variable    | Type    | Description                                                                                                                                       |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SHEET_GID` | integer | The numeric tab ID — the value of the `gid=` query param in the sheet URL. The app uses this to resolve the tab title before pulling row values. |
 
 ### Finding the values
