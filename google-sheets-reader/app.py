@@ -36,9 +36,6 @@ def sheet_data():
     if not SHEET_ID:
         info["error"] = "SHEET_ID environment variable is not set."
         return pd.DataFrame(), info
-    if SHEET_GID is None:
-        info["error"] = "SHEET_GID environment variable is not set or not an integer."
-        return pd.DataFrame(), info
     token = session_token()
     if not token:
         info["error"] = (
@@ -62,14 +59,21 @@ def sheet_data():
         google_creds = Credentials(token=access_token)
         service = build("sheets", "v4", credentials=google_creds, cache_discovery=False)
         meta = service.spreadsheets().get(spreadsheetId=SHEET_ID).execute()
+        sheets = meta.get("sheets", [])
         target_title = None
-        for s in meta.get("sheets", []):
-            if s["properties"]["sheetId"] == SHEET_GID:
-                target_title = s["properties"]["title"]
-                break
-        if not target_title:
-            info["error"] = f"No tab with gid={SHEET_GID} in spreadsheet {SHEET_ID}."
-            return pd.DataFrame(), info
+        if SHEET_GID is None:
+            if not sheets:
+                info["error"] = f"Spreadsheet {SHEET_ID} has no tabs."
+                return pd.DataFrame(), info
+            target_title = sheets[0]["properties"]["title"]
+        else:
+            for s in sheets:
+                if s["properties"]["sheetId"] == SHEET_GID:
+                    target_title = s["properties"]["title"]
+                    break
+            if not target_title:
+                info["error"] = f"No tab with gid={SHEET_GID} in spreadsheet {SHEET_ID}."
+                return pd.DataFrame(), info
         info["tab_title"] = target_title
         result = (
             service.spreadsheets()
